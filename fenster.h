@@ -22,6 +22,7 @@ struct fenster {
   const char *title;
   const int width;
   const int height;
+  const int scale;
   uint32_t *buf;
   int keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
   int mod;       /* mod is 4 bits mask, ctrl=1, shift=2, alt=4, meta=8 */
@@ -82,7 +83,7 @@ static void fenster_draw_rect(id v, SEL s, CGRect r) {
                     provider, NULL, false, kCGRenderingIntentDefault);
   CGColorSpaceRelease(space);
   CGDataProviderRelease(provider);
-  CGContextDrawImage(context, CGRectMake(0, 0, f->width, f->height), img);
+  CGContextDrawImage(context, CGRectMake(0, 0, f->width * f->scale, f->height * f->scale), img);
   CGImageRelease(img);
 }
 
@@ -97,7 +98,7 @@ FENSTER_API int fenster_open(struct fenster *f) {
   msg1(void, NSApp, "setActivationPolicy:", NSInteger, 0);
   f->wnd = msg4(id, msg(id, cls("NSWindow"), "alloc"),
                 "initWithContentRect:styleMask:backing:defer:", CGRect,
-                CGRectMake(0, 0, f->width, f->height), NSUInteger, 3,
+                CGRectMake(0, 0, f->width * f->scale, f->height * f->scale), NSUInteger, 3,
                 NSUInteger, 2, BOOL, NO);
   Class windelegate =
       objc_allocateClassPair((Class)cls("NSObject"), "FensterDelegate", 0);
