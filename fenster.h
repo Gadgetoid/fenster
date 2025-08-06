@@ -23,6 +23,8 @@ struct fenster {
   const int width;
   const int height;
   const int scale;
+  int window_width;
+  int window_height;
   uint32_t *buf;
   int keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
   int mod;       /* mod is 4 bits mask, ctrl=1, shift=2, alt=4, meta=8 */
@@ -84,7 +86,7 @@ static void fenster_draw_rect(id v, SEL s, CGRect r) {
   CGColorSpaceRelease(space);
   CGDataProviderRelease(provider);
   CGContextSetInterpolationQuality(context, kCGInterpolationNone);
-  CGContextDrawImage(context, CGRectMake(0, 0, f->width * f->scale, f->height * f->scale), img);
+  CGContextDrawImage(context, CGRectMake(0, 0, f->window_width, f->window_height), img);
   CGImageRelease(img);
 }
 
@@ -94,12 +96,23 @@ static BOOL fenster_should_close(id v, SEL s, id w) {
   return YES;
 }
 
+static void fenster_window_resize(id v, SEL s, id note) {
+    (void)s;
+    struct fenster *f = (struct fenster *)objc_getAssociatedObject(v, "fenster");
+    CGRect frame = msg(CGRect, msg(id, note, "object"), "frame");
+
+    f->window_width = frame.size.width;
+    f->window_height = frame.size.height;
+}
+
 FENSTER_API int fenster_open(struct fenster *f) {
+  f->window_width = f->width * f->scale;
+  f->window_height = f->height * f->scale;
   msg(id, cls("NSApplication"), "sharedApplication");
   msg1(void, NSApp, "setActivationPolicy:", NSInteger, 0);
   f->wnd = msg4(id, msg(id, cls("NSWindow"), "alloc"),
                 "initWithContentRect:styleMask:backing:defer:", CGRect,
-                CGRectMake(0, 0, f->width * f->scale, f->height * f->scale), NSUInteger, 3,
+                CGRectMake(0, 0, f->width * f->scale, f->height * f->scale), NSUInteger, 3 + 8,
                 NSUInteger, 2, BOOL, NO);
   Class windelegate =
       objc_allocateClassPair((Class)cls("NSObject"), "FensterDelegate", 0);
@@ -119,9 +132,19 @@ FENSTER_API int fenster_open(struct fenster *f) {
   id title = msg1(id, cls("NSString"), "stringWithUTF8String:", const char *,
                   f->title);
   msg1(void, f->wnd, "setTitle:", id, title);
+  CGSize size;
+  size.width = 4;
+  size.height = 3;
+  msg1(void, f->wnd, "setContentAspectRatio:", CGSize, size);
   msg1(void, f->wnd, "makeKeyAndOrderFront:", id, nil);
   msg(void, f->wnd, "center");
   msg1(void, NSApp, "activateIgnoringOtherApps:", BOOL, YES);
+  class_addMethod(c, sel_getUid("windowDidResize:"), (IMP)fenster_window_resize, "v@:@");
+  msg4(void, msg(id, cls("NSNotificationCenter"), "defaultCenter"),
+       "addObserver:selector:name:object:", id, v,
+       SEL, sel_getUid("windowDidResize:"),
+       id, msg1(id, cls("NSString"), "stringWithUTF8String:", const char*, "NSWindowDidResizeNotification"),
+       id, f->wnd);
   return 0;
 }
 
